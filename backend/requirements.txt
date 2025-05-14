@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+motor        # MongoDB async client
+python-dotenv
+httpx
