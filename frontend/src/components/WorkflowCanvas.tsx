@@ -16,13 +16,18 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import CustomEdge from './CustomEdge';
 import axios from 'axios';
-import { Box, Button, TextField, Typography, Paper } from '@mui/material';
+import { Box, TextField, Paper, Typography, Fab } from '@mui/material';
+import NodeChat from './NodeChat';
+import { motion, AnimatePresence } from 'framer-motion';
+import SaveIcon from '@mui/icons-material/Save';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 const edgeTypes = { custom: CustomEdge };
 
 export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
   const [workflowName, setWorkflowName] = useState('');
   const [executionResult, setExecutionResult] = useState(null);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const onNodesChange = (changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -46,6 +51,10 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
   };
 
   const handleSaveWorkflow = async () => {
+    if (!workflowName.trim()) {
+      alert('Please enter workflow name!');
+      return;
+    }
     const agents = nodes.map((n) => ({
       model: n.data.model,
       query: n.data.query,
@@ -58,11 +67,10 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
     setNodes([]);
     setEdges([]);
     setExecutionResult(null);
-    window.location.reload(); // reloads the entire page
+    window.location.reload();
   };
 
   const handleRunWorkflow = async () => {
-    const agents = [];
     const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
     const incomingEdges = edges.reduce((acc, e) => {
       acc[e.target] = e.source;
@@ -111,10 +119,19 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
     setExecutionResult(lastResult || 'No output');
   };
 
+  const handleNodeClick = (event, node) => {
+    event.stopPropagation();
+    setSelectedNode(node);
+  };
+
+  const handleCanvasClick = () => {
+    setSelectedNode(null);
+  };
+
   const nodesWithControls = nodes.map((node, index) => ({
     ...node,
     type: 'default',
-    position: node.position || { x: index * 200, y: 100 }, // Ensure unique positions for each node
+    position: node.position || { x: index * 200, y: 100 },
     data: {
       ...node.data,
       label: (
@@ -123,7 +140,10 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
           <div className="text-sm text-gray-700">{node.data.query}</div>
           <div className="mt-2 flex gap-2">
             <button
-              onClick={() => handleDeleteNode(node.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteNode(node.id);
+              }}
               className="px-2 py-1 text-xs bg-red-400 rounded text-white"
             >
               Delete
@@ -141,38 +161,19 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
   }));
 
   return (
-    <Box>
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Workflow Configuration
-        </Typography>
-        <Box display="flex" gap={2} alignItems="center">
-          <TextField
-            label="Workflow Name"
-            value={workflowName}
-            onChange={(e) => setWorkflowName(e.target.value)}
-            variant="outlined"
-            fullWidth
-            size="small"
-            placeholder="Enter workflow name"
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSaveWorkflow}
-          >
-            Save
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handleRunWorkflow}
-          >
-            Run
-          </Button>
-        </Box>
-      </Paper>
-      <Box sx={{ height: "80vh", border: "1px solid #ccc", borderRadius: 2 }}>
+    <Box sx={{ position: 'relative', height: '90vh' }}>
+      <TextField
+        label="Workflow Name"
+        value={workflowName}
+        onChange={(e) => setWorkflowName(e.target.value)}
+        variant="outlined"
+        fullWidth
+        size="small"
+        placeholder="Enter workflow name"
+        sx={{ mb: 2 }}
+      />
+
+      <Box sx={{ height: '100%', border: '1px solid #ccc', borderRadius: 2 }} onClick={handleCanvasClick}>
         <ReactFlow
           nodes={nodesWithControls}
           edges={edgesWithDelete}
@@ -180,6 +181,7 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           edgeTypes={edgeTypes}
+          onNodeClick={handleNodeClick}
           fitView
         >
           <MiniMap />
@@ -187,6 +189,74 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
           <Background color="#aaa" gap={16} />
         </ReactFlow>
       </Box>
+
+      <AnimatePresence>
+        {selectedNode && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.3 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'black',
+                zIndex: 999,
+              }}
+              onClick={handleCanvasClick}
+            />
+            <motion.div
+              key="panel"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.4 }}
+              style={{
+                position: 'fixed',
+                top: 0,
+                right: 0,
+                width: '400px',
+                height: '100vh',
+                background: '#fff',
+                boxShadow: '-2px 0 10px rgba(0,0,0,0.2)',
+                zIndex: 1000,
+              }}
+            >
+              <NodeChat
+                node={selectedNode}
+                agent={selectedNode.data}
+                onClose={() => setSelectedNode(null)}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Floating action buttons */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          zIndex: 1500,
+        }}
+      >
+        <Fab color="secondary" onClick={handleRunWorkflow} aria-label="Run">
+          <PlayArrowIcon />
+        </Fab>
+        <Fab color="primary" onClick={handleSaveWorkflow} aria-label="Save">
+          <SaveIcon />
+        </Fab>
+      </Box>
+
       {executionResult && (
         <Paper elevation={3} sx={{ mt: 3, p: 3 }}>
           <Typography variant="h6" gutterBottom>

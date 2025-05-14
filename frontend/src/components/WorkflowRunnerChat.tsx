@@ -15,7 +15,9 @@ export default function WorkflowRunnerChat({ workflowId }: { workflowId: string 
     setFinalOutput(null);
     setMessages([]);
     try {
-      const res = await axios.post(`http://localhost:8000/workflow/${workflowId}/run`);
+      const res = await axios.post(`http://localhost:8000/workflow/${workflowId}/run_contextual`, {
+        user_input: userInput, // Include user_input in the request body
+      });
       const { status, trace, prompt, step, final_output } = res.data;
 
       setMessages(trace || []);
@@ -34,18 +36,18 @@ export default function WorkflowRunnerChat({ workflowId }: { workflowId: string 
   };
 
   const resumeWorkflow = async () => {
-    if (!userInput) return;
+    if (!userInput) return; // Ensure user input is provided
     setLoading(true);
     try {
       const res = await axios.post(`http://localhost:8000/workflow/${workflowId}/resume`, {
         step_index: pausedStep,
-        user_input: userInput,
+        user_input: userInput, // Send user input to the API
       });
 
       const { status, trace, prompt, step, final_output } = res.data;
 
       setMessages(prev => [...prev, ...(trace || [])]);
-      setUserInput('');
+      setUserInput(''); // Clear the input field
       setFinalOutput(status === 'success' ? final_output : null);
 
       if (status === 'need_user_input') {
@@ -153,10 +155,10 @@ export default function WorkflowRunnerChat({ workflowId }: { workflowId: string 
         </div>
       )}
 
-      {finalOutput && (
+      {finalOutput?.output && (
         <div className="mt-6 p-4 bg-green-200 border border-green-400 rounded">
           <p className="font-semibold text-green-800">✅ Final Output:</p>
-          <p className="text-green-900 mt-1">{finalOutput}</p>
+          <p className="text-green-900 mt-1">{finalOutput?.output}</p>
         </div>
       )}
     </div>
