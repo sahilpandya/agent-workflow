@@ -1,166 +1,159 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Typography } from '@mui/material';
+import { Box, TextField, Button, Typography, CircularProgress, Paper, Stack } from '@mui/material';
 
 export default function WorkflowRunnerChat({ workflowId }: { workflowId: string }) {
   const [messages, setMessages] = useState<any[]>([]);
+  const [userInput, setUserInput] = useState('');
+  const [loading, setLoading] = useState(false);
   const [pausedStep, setPausedStep] = useState<number | null>(null);
   const [promptText, setPromptText] = useState('');
-  const [userInput, setUserInput] = useState('');
-  const [finalOutput, setFinalOutput] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+
+  const addMessage = (role: 'user' | 'agent', content: string, agentName?: string) => {
+    setMessages((prev) => [...prev, { role, content, agentName }]);
+  };
 
   const runWorkflow = async () => {
     setLoading(true);
-    setFinalOutput(null);
     setMessages([]);
+    setPausedStep(null);
+    setPromptText('');
     try {
       const res = await axios.post(`http://localhost:8000/workflow/${workflowId}/run_contextual`, {
-        user_input: userInput, // Include user_input in the request body
+        user_input: userInput,
       });
-      const { status, trace, prompt, step, final_output } = res.data;
-
-      setMessages(trace || []);
-      setFinalOutput(status === 'success' ? final_output : null);
+      const { status, context, prompt, step, final_output } = res.data;
 
       if (status === 'need_user_input') {
         setPausedStep(step);
         setPromptText(prompt);
+        addMessage('agent', prompt, `Agent ${step + 1}`);
       } else {
-        setPausedStep(null);
+        addMessage('agent', context.final_output?.output || 'Workflow completed.', 'Agent');
+        if (final_output) {
+          addMessage(
+            'agent',
+            `Final Output:\nAgent: ${final_output.agent}\nOutput: ${final_output.output}\nQuery: ${final_output.step_query}`,
+            'Agent'
+          );
+        }
       }
     } catch (err) {
       console.error('Error running workflow', err);
+      addMessage('agent', 'Error running workflow.', 'Agent');
     }
     setLoading(false);
   };
 
   const resumeWorkflow = async () => {
-    if (!userInput) return; // Ensure user input is provided
+    if (!userInput) return;
     setLoading(true);
     try {
       const res = await axios.post(`http://localhost:8000/workflow/${workflowId}/resume`, {
         step_index: pausedStep,
-        user_input: userInput, // Send user input to the API
+        user_input: userInput,
       });
+      const { status, context, prompt, step, final_output } = res.data;
 
-      const { status, trace, prompt, step, final_output } = res.data;
-
-      setMessages(prev => [...prev, ...(trace || [])]);
-      setUserInput(''); // Clear the input field
-      setFinalOutput(status === 'success' ? final_output : null);
+      addMessage('user', userInput);
+      setUserInput('');
 
       if (status === 'need_user_input') {
         setPausedStep(step);
         setPromptText(prompt);
+        addMessage('agent', prompt, `Agent ${step + 1}`);
       } else {
         setPausedStep(null);
         setPromptText('');
+        addMessage('agent', context.final_output?.output || 'Workflow completed.', 'Agent');
+        if (final_output) {
+          addMessage(
+            'agent',
+            `Final Output:\nAgent: ${final_output.agent}\nOutput: ${final_output.output}\nQuery: ${final_output.step_query}`,
+            'Agent'
+          );
+        }
       }
     } catch (err) {
       console.error('Error resuming workflow', err);
+      addMessage('agent', 'Error resuming workflow.', 'Agent');
     }
     setLoading(false);
   };
 
-  const handleEditLastResponse = (value: string) => {
-    setMessages(prev => {
-      const updated = [...prev];
-      if (updated.length > 0) {
-        updated[updated.length - 1].response = value;
-      }
-      return updated;
-    });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pausedStep !== null) {
+      await resumeWorkflow();
+    } else {
+      await runWorkflow();
+    }
+  };
+
+  const handleRestart = () => {
+    setMessages([]);
+    setUserInput('');
+    setPausedStep(null);
+    setPromptText('');
   };
 
   return (
-    <div className="bg-white p-4 rounded shadow w-full">
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={runWorkflow}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-          disabled={loading}
-          color="primary"
-          style={{marginRight: "10px"}}
-        >
-          ▶️ Run Workflow
-        </button>
-        <button
-          onClick={() => {
-            setMessages([]);
-            setFinalOutput(null);
-            setPausedStep(null);
-            setUserInput('');
-            setPromptText('');
-          }}
-          className="bg-gray-400 text-white px-4 py-2 rounded"
-          disabled={loading}
-        >
-          🔄 Restart
-        </button>
-      </div>
-
-      {loading && <div className="text-sm text-gray-600 mb-2">⏳ Running...</div>}
-
-      <div className="space-y-3" style={{ maxHeight: '400px', overflowY: 'auto', marginTop: '10px' }}>
-        
+    <Paper elevation={3} sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', mb: 2 }}>
         {messages.map((msg, idx) => (
-          <div
+          <Box
             key={idx}
-            className={`p-3 rounded-lg max-w-xl ${
-              msg.status === 'error'
-                ? 'bg-red-100'
-                : idx % 2 === 0
-                ? 'bg-blue-100 self-start'
-                : 'bg-green-100 self-end'
-            }`}
+            sx={{
+              display: 'flex',
+              justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              mb: 1,
+            }}
           >
-            <div className="text-sm text-gray-500 mb-1">
-              <strong>{msg.model}</strong> - Step {msg.step || idx + 1}
-            </div>
-            <div className="text-sm"><strong>Query:</strong> {msg.query}</div>
-            <div className="mt-1 text-sm">
-              <strong>Response:</strong>{' '}
-              {idx === messages.length - 1 && pausedStep === null ? (
-                <input
-                  type="text"
-                  value={msg.response}
-                  onChange={(e) => handleEditLastResponse(e.target.value)}
-                  className="w-full mt-1 p-1 border rounded"
-                />
-              ) : (
-                msg.response
-              )}
-            </div>
-          </div>
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                bgcolor: msg.role === 'user' ? 'primary.light' : 'secondary.light',
+                color: msg.role === 'user' ? 'primary.contrastText' : 'secondary.contrastText',
+                maxWidth: '70%',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                {msg.role === 'user' ? 'You' : msg.agentName || 'Agent'}
+              </Typography>
+              <Typography variant="body2">{msg.content}</Typography>
+            </Box>
+          </Box>
         ))}
-      </div>
-
-      {pausedStep !== null && (
-        <div className="mt-6 p-4 bg-yellow-100 rounded">
-          <p className="mb-2 font-semibold">🔔 Input required: {promptText}</p>
-          <input
-            className="w-full p-2 border rounded mb-2"
-            placeholder="Type your response..."
-            value={userInput}
-            onChange={e => setUserInput(e.target.value)}
-          />
-          <button
-            onClick={resumeWorkflow}
-            className="bg-green-600 text-white px-4 py-2 rounded"
-            disabled={loading}
-          >
-            Submit & Continue
-          </button>
-        </div>
-      )}
-
-      {finalOutput?.output && (
-        <div className="mt-6 p-4 bg-green-200 border border-green-400 rounded">
-          <p className="font-semibold text-green-800">✅ Final Output:</p>
-          <p className="text-green-900 mt-1">{finalOutput?.output}</p>
-        </div>
-      )}
-    </div>
+      </Box>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={handleRestart}
+          disabled={loading}
+        >
+          Restart
+        </Button>
+      </Stack>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder={pausedStep !== null ? 'Enter your input...' : 'Start the workflow...'}
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+          disabled={loading}
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          disabled={loading || !userInput}
+        >
+          {loading ? <CircularProgress size={24} /> : pausedStep !== null ? 'Submit' : 'Run'}
+        </Button>
+      </form>
+    </Paper>
   );
 }
