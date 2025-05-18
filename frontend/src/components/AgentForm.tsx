@@ -4,7 +4,7 @@ import { TextField, MenuItem, Button, Typography, Box, Grid, Paper } from "@mui/
 
 const providers = ["OpenAI", "HuggingFace", "Local"];
 const modelsByProvider: { [key: string]: string[] } = {
-  OpenAI: ["GPT-4", "GPT-3.5", "GPT-3.5-turbo"],
+  OpenAI: ["gpt-4", "gpt-3.5", "gpt-3.5-turbo"],
   HuggingFace: ["BERT", "RoBERTa", "DistilBERT"],
   Local: ["Ollama", "Mistral", "Llama2"],
 };
@@ -21,6 +21,8 @@ export default function AgentForm({ onSubmit, selectedAgent }: { onSubmit: (data
   useEffect(() => {
     if (selectedAgent) {
       // Prepopulate form fields when selectedAgent changes
+      setValue("name", selectedAgent.name || "");
+      setValue("description", selectedAgent.description || "");
       setValue("provider", selectedAgent.provider || "");
       setValue("model", selectedAgent.model || "");
       setValue("mode", selectedAgent.mode || "");
@@ -35,6 +37,8 @@ export default function AgentForm({ onSubmit, selectedAgent }: { onSubmit: (data
     onSubmit(data);
     reset();
     setConfig({});
+    setValue("name", "");
+    setValue("description", "");
     setValue("provider", "");
     setValue("model", "");
     setValue("mode", "");
@@ -52,6 +56,34 @@ export default function AgentForm({ onSubmit, selectedAgent }: { onSubmit: (data
       </Typography>
       <Box component="form" onSubmit={handleSubmit(submitHandler)} noValidate sx={{ mt: 2 }}>
         <Grid container spacing={3}>
+          {/* Agent Name */}
+          <Grid item xs={12}>
+            <TextField
+              label="Agent Name"
+              fullWidth
+              {...register("name", { required: true })}
+              variant="outlined"
+              placeholder="Enter agent name"
+              InputLabelProps={{ shrink: true }}
+              size="medium"
+              helperText="Provide a unique name for the agent"
+            />
+          </Grid>
+
+          {/* Agent Description */}
+          <Grid item xs={12}>
+            <TextField
+              label="Agent Description"
+              fullWidth
+              {...register("description", { required: true })}
+              variant="outlined"
+              placeholder="Enter agent description"
+              InputLabelProps={{ shrink: true }}
+              size="medium"
+              helperText="Provide a brief description of the agent"
+            />
+          </Grid>
+
           {/* Provider Dropdown */}
           <Grid item xs={12}>
             <TextField

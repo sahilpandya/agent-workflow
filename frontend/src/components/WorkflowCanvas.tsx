@@ -30,11 +30,19 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const onNodesChange = (changes: NodeChange[]) => {
-    setNodes((nds) => applyNodeChanges(changes, nds));
+    setNodes((nds) => {
+      const updatedNodes = applyNodeChanges(changes, nds);
+      console.log('Updated Nodes:', updatedNodes); // Debugging log
+      return updatedNodes;
+    });
   };
 
   const onEdgesChange = (changes: EdgeChange[]) => {
-    setEdges((eds) => applyEdgeChanges(changes, eds));
+    setEdges((eds) => {
+      const updatedEdges = applyEdgeChanges(changes, eds);
+      console.log('Updated Edges:', updatedEdges); // Debugging log
+      return updatedEdges;
+    });
   };
 
   const onConnect = (params: Connection) => {
@@ -60,14 +68,18 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
       query: n.data.query,
       mode: n.data.mode,
       additional_info: n.data.additional_info || {},
+      name: n.data.name,
+      description: n.data.description,
+      provider: n.data.provider,
     }));
-    await axios.post('http://localhost:8000/workflow', { name: workflowName, agents });
-    alert('Workflow saved!');
-    setWorkflowName('');
-    setNodes([]);
-    setEdges([]);
-    setExecutionResult(null);
-    window.location.reload();
+    console.log('Saving Workflow:', { name: workflowName, agents }); // Debugging log
+    try {
+      await axios.post('http://localhost:8000/workflow', { name: workflowName, agents });
+      alert('Workflow saved!');
+    } catch (err) {
+      console.error('Error saving workflow:', err);
+      alert('Failed to save workflow.');
+    }
   };
 
   const handleRunWorkflow = async () => {
@@ -87,6 +99,9 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
         query: updatedQuery,
         mode: current.data.mode,
         additional_info: current.data.additional_info || {},
+        name: current.data.name,
+        description: current.data.description,
+        provider: current.data.provider,
       };
 
       try {

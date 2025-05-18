@@ -12,6 +12,10 @@ from fastapi.logger import logger
 load_dotenv()
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 
+DATA_CONNECTOR_URL = "http://data-connector-service:8000/data/query"
+DATA_CONNECTOR_API_TOKEN = "VALID_API_TOKEN"  # Configurable per DC
+
+
 # Initialize FastAPI
 app = FastAPI()
 app.add_middleware(
@@ -28,6 +32,8 @@ db = client.workflowDB
 
 # ---------------------- Schemas ----------------------
 class AgentConfig(BaseModel):
+    name: str  # Add agent name
+    description: str  # Add agent description
     provider: str
     model: str
     query: str
@@ -58,11 +64,16 @@ async def call_model(agent: AgentConfig, context: dict = None):
         model = agent.model
         prompt = agent.query
 
-        if context:
-            user_input = context.get("user_input") or ""
-            prompt = prompt.replace("{{input}}", user_input)
-            if context.get('entities'):
-                prompt += f"\nKnown Entities: {context['entities']}"
+        # Ensure user_input is always included in the prompt
+        user_input = context.get("user_input", "")
+        if "{{input}}" not in prompt:
+            prompt += f"\nUser Input: {user_input}"
+        else: prompt = prompt.replace("{{input}}", user_input)
+
+        if context.get('entities'):
+            prompt += f"\nKnown Entities: {context['entities']}"
+
+        print(f"[LOG] Calling {provider} with model {model} and prompt: {prompt}")
 
         # ----------- OPENAI -----------
         if provider == "openai":
@@ -131,6 +142,11 @@ router = APIRouter()
 
 @router.post("/workflow")
 async def create_workflow(req: WorkflowCreateRequest):
+    # Validate agents to ensure name and description are provided
+    for agent in req.agents:
+        if not agent.name or not agent.description:
+            raise HTTPException(status_code=400, detail="Agent name and description are required.")
+    print(f"Creating workflow: {req.dict()}")  # Debugging log
     result = await db.workflows.insert_one(req.dict())
     return {"_id": str(result.inserted_id)}
 
@@ -139,7 +155,19 @@ async def list_workflows():
     workflows = await db.workflows.find().to_list(None)
     for wf in workflows:
         wf["_id"] = str(wf["_id"])
+    print(f"Listing workflows: {workflows}")  # Debugging log
     return workflows
+
+@router.put("/workflow/{workflow_id}")
+async def update_workflow(workflow_id: str, req: WorkflowCreateRequest):
+    print(f"Updating workflow {workflow_id} with data: {req.dict()}")  # Debugging log
+    result = await db.workflows.update_one(
+        {"_id": ObjectId(workflow_id)},
+        {"$set": req.dict()}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Workflow not found or no changes made.")
+    return {"detail": "Workflow updated successfully"}
 
 @router.post("/workflow/{workflow_id}/run")
 async def run_workflow(workflow_id: str):
@@ -248,12 +276,14 @@ async def run_workflow_contextual(workflow_id: str, req: WorkflowContextRequest)
             agent_config = AgentConfig(**agent)
             output = await call_model(agent_config, context)
 
-            context.setdefault("step_outputs", []).append({
+            # Update context with the output of the current agent
+            context["step_outputs"].append({
                 "agent": agent["model"],
                 "output": output["response"],
                 "step_query": agent["query"]
             })
-            context.setdefault("history", []).append(output["response"])
+            context["history"].append(output["response"])
+            context["user_input"] = output["response"]  # Pass the output as input to the next agent
 
             if output["status"] == "need_user_input":
                 return {
@@ -299,5 +329,43 @@ async def health_check():
         return {"status": "healthy"}
     except Exception:
         raise HTTPException(status_code=500, detail="Database connection failed")
+
+
+@app.post("/agent/query_with_data")
+def agent_query_with_data(request: dict):
+    """
+    MCP server receives agent request with data query requirements.
+    """
+
+    # Agent payload
+    agent_input = request.get("agent_input")
+    data_query_config = request.get("data_query_config")  # Passed from Agent UI
+
+    # Validate
+    if not data_query_config:
+        raise HTTPException(status_code=400, detail="Missing data query config")
+
+    # MCP Calls Data Connector Service
+    try:
+        response = requests.post(
+            DATA_CONNECTOR_URL,
+            params={"token": DATA_CONNECTOR_API_TOKEN},
+            json=data_query_config
+        )
+        response.raise_for_status()
+        data_result = response.json()
+    except Exception as e:
+        return {"error": f"Failed to fetch data: {str(e)}"}
+
+    # MCP can now enrich agent input with data
+    enriched_input = f"{agent_input}\nData:\n{data_result}"
+
+    # Send to agent model (LLM or processing engine)
+    result = process_agent_with_data(enriched_input)  # Example function
+    return {"agent_output": result}
+
+def process_agent_with_data(enriched_input):
+    # Example mock (use your LLM, Ollama, OpenAI, etc.)
+    return f"[Agent Reply based on input and data]\n{enriched_input}"
 
 app.include_router(router)

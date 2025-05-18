@@ -7,7 +7,7 @@ client = MongoClient(MONGO_URL)
 db = client.workflowDB
 
 # Workflow ID to update
-workflow_id = "681c9817acf85040b91d51c3"
+workflow_id = "681b4655841b3c76a1859d7f"
 
 # Fetch the workflow to inspect its current state
 workflow = db.workflows.find_one({"_id": ObjectId(workflow_id)})
@@ -16,14 +16,17 @@ if not workflow:
 else:
     print(f"Current workflow: {workflow}")
 
-# Add the missing 'provider' field to the first agent
+# Add missing 'name' and 'description' fields to all agents
+updated_agents = []
+for idx, agent in enumerate(workflow.get("agents", [])):
+    agent["name"] = agent.get("name", f"Agent {idx + 1}")  # Default name if missing
+    agent["description"] = agent.get("description", f"Description for Agent {idx + 1}")  # Default description if missing
+    updated_agents.append(agent)
+
+# Update the workflow in the database
 result = db.workflows.update_one(
     {"_id": ObjectId(workflow_id)},
-    {
-        "$set": {
-            "agents.0.provider": "local"  # Add the missing 'provider' field
-        }
-    }
+    {"$set": {"agents": updated_agents}}
 )
 
 if result.modified_count > 0:

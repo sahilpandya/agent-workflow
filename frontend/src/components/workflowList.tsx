@@ -94,7 +94,10 @@ export default function WorkflowList() {
             model: selectedAgent.model,
             query: query,
             mode: selectedAgent.mode || "local", // ensure this is included
-            additional_info: selectedAgent.additional_info || {}
+            additional_info: selectedAgent.additional_info || {},
+            name: selectedAgent.name,
+            description: selectedAgent.description,
+            provider: selectedAgent.provider
           }
         ]
       });
@@ -110,6 +113,12 @@ export default function WorkflowList() {
       const errorMsg = { sender: 'agent', text: 'Error testing agent' };
       setChatMessages(prev => [...prev, errorMsg]);
     }
+  };
+
+  const handleEditWorkflow = (workflow: any) => {
+    // Navigate to WorkflowCanvas with the workflow data
+    console.log('Navigating to edit workflow:', workflow); // Debugging log
+    // navigate('/workflow-builder', { state: { workflow } });
   };
 
   return (
@@ -137,9 +146,13 @@ export default function WorkflowList() {
                 )}
               </Card>
 
-              {/* <Button variant="contained" color="primary" onClick={() => runWorkflow(w._id)}>
-                ▶️ Run Workflow
-              </Button> */}
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handleEditWorkflow(w)}
+              >
+                Edit Workflow
+              </Button>
 
               <WorkflowRunnerChat workflowId={w._id} />
             </AccordionDetails>
