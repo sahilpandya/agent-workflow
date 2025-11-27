@@ -50,6 +50,7 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
       model: n.data.model,
       query: n.data.query,
       mode: n.data.mode,
+      provider: n.data.provider,
       additional_info: n.data.additional_info || {},
     }));
     await axios.post('http://localhost:8000/workflow', { name: workflowName, agents });
@@ -79,6 +80,7 @@ export default function WorkflowCanvas({ nodes, edges, setNodes, setEdges }) {
         query: updatedQuery,
         mode: current.data.mode,
         additional_info: current.data.additional_info || {},
+        provider: current.data.provider,
       };
 
       try {

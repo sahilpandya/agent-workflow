@@ -88,13 +88,14 @@ export default function WorkflowList() {
         query = `${query}\n${agentTestInput}`; // append input at the end
       }
 
-      const res = await axios.post('http://localhost:8000/agent/test', {
+      const res = await axios.post('http://localhost:8000/ask', {
         agents: [
           {
             model: selectedAgent.model,
             query: query,
             mode: selectedAgent.mode || "local", // ensure this is included
-            additional_info: selectedAgent.additional_info || {}
+            additional_info: selectedAgent.additional_info || {},
+            provider: selectedAgent.provider || "local",
           }
         ]
       });

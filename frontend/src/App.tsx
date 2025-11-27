@@ -46,7 +46,7 @@ export default function App() {
       setNodes((prev) =>
         prev.map((node) =>
           node.id === selectedAgent.id
-            ? { ...node, data: { label: `${data.model}: ${data.query}`, model: data.model, query: data.query, mode: data.mode } }
+            ? { ...node, data: { label: `${data.model}: ${data.query}`, model: data.model, query: data.query, mode: data.mode, provider: data.provider } }
             : node
         )
       );
@@ -56,7 +56,7 @@ export default function App() {
       const id = nodeId.toString();
       const newNode: Node = {
         id,
-        data: { label: `${data.model}: ${data.query}`, model: data.model, query: data.query, mode: data.mode },
+        data: { label: `${data.model}: ${data.query}`, model: data.model, query: data.query, mode: data.mode, provider: data.provider },
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         type: "default",
       };
